@@ -48,21 +48,33 @@ if st.button("Generate E-Book Raksasa ✨"):
                 time.sleep(1) # Jeda agar tidak terkena limit API
 
         # LANGKAH 3: Satukan ke PDF
-        status_text.text("Menyusun PDF... Mohon tunggu.")
-        pdf = FPDF()
-        pdf.set_auto_page_break(auto=True, margin=15)
-        
-        for title, body in seluruh_isi:
-            pdf.add_page()
-            pdf.set_font("Arial", 'B', 16)
-            pdf.multi_cell(0, 10, title.encode('latin-1', 'replace').decode('latin-1'))
-            pdf.ln(5)
-            pdf.set_font("Arial", size=12)
-            pdf.multi_cell(0, 8, body.encode('latin-1', 'replace').decode('latin-1'))
-        
-        pdf_output = pdf.output(dest='S').encode('latin-1', 'replace')
-        
-        st.success(f"Selesai! {jml_bab} Bab berhasil ditulis.")
-        st.download_button("Download E-Book Raksasa (PDF)", data=pdf_output, file_name="ebook_raksasa.pdf")
-    else:
-        st.error("Masukkan topik terlebih dahulu!")
+       # --- BAGIAN PENYUSUNAN PDF ---
+status_text.text("Menyusun PDF... Mohon tunggu.")
+pdf = FPDF()
+pdf.set_auto_page_break(auto=True, margin=15)
+
+for title, body in seluruh_isi:
+    pdf.add_page()
+    # Header Bab
+    pdf.set_font("Arial", 'B', 16)
+    # Gunakan .encode().decode() untuk menghindari karakter aneh yang bikin crash
+    safe_title = title.encode('latin-1', 'replace').decode('latin-1')
+    pdf.multi_cell(0, 10, safe_title)
+    pdf.ln(5)
+    
+    # Isi Bab
+    pdf.set_font("Arial", size=12)
+    safe_body = body.encode('latin-1', 'replace').decode('latin-1')
+    pdf.multi_cell(0, 8, safe_body)
+
+# PERBAIKAN DI SINI:
+# Di fpdf2 terbaru, cukup panggil output() tanpa argumen untuk dapet bytes
+pdf_output = pdf.output() 
+
+st.success(f"Selesai! {jml_bab} Bab berhasil ditulis.")
+st.download_button(
+    label="Download E-Book Raksasa (PDF)",
+    data=pdf_output, # Langsung masukkan pdf_output
+    file_name="ebook_raksasa.pdf",
+    mime="application/pdf"
+)
