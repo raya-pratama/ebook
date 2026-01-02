@@ -5,77 +5,82 @@ import time
 
 # --- KONFIGURASI AI ---
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-pro')
+model = genai.GenerativeModel('gemini-1.5-flash') # Gunakan flash agar lebih cepat
 
-def generate_text(prompt):
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"Error: {e}"
+# --- INISIALISASI SESSION STATE (Memori Penyimpanan) ---
+if 'isi_buku' not in st.session_state:
+    st.session_state.isi_buku = [] # List untuk menyimpan (Judul Bab, Teks)
+if 'daftar_bab' not in st.session_state:
+    st.session_state.daftar_bab = []
 
-# --- TAMPILAN ---
-st.title("📚 AI E-Book Mega Generator (100+ Hal)")
+st.set_page_config(page_title="AI Book Mega Creator", page_icon="📚")
+st.title("📚 AI Mega E-Book Creator")
+st.write("Gunakan sistem cicil untuk membuat buku hingga ratusan halaman.")
 
-topik = st.text_input("Topik E-Book:", placeholder="Contoh: Panduan Lengkap Jaringan Komputer")
-jml_bab = st.number_input("Jumlah Bab (Misal 20 Bab untuk ~100 hal):", min_value=1, max_value=50, value=10)
+# --- INPUT USER ---
+topik = st.text_input("Topik E-Book:", placeholder="Contoh: Sejarah Lengkap Peradaban Dunia")
+jml_bab_target = st.number_input("Target Total Bab (Misal 25 bab untuk ~100 hal):", min_value=1, value=10)
 
-if st.button("Generate E-Book Raksasa ✨"):
-    if topik:
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        # LANGKAH 1: Buat Outline
-        status_text.text("Membuat Outline/Daftar Isi...")
-        outline_prompt = f"Buat daftar isi untuk e-book tentang {topik} sebanyak {jml_bab} bab. Hanya berikan judul babnya saja."
-        outline = generate_text(outline_prompt)
-        
-        # LANGKAH 2: Looping tulis per bab
-        seluruh_isi = []
-        daftar_bab = outline.split("\n")
-        
-        for i, bab_title in enumerate(daftar_bab):
-            if bab_title.strip():
-                status_text.text(f"Menulis {bab_title}...")
-                # Perintah tulis 4-5 halaman per bab (sekitar 1500-2000 kata)
-                prompt_bab = f"Tuliskan isi lengkap untuk {bab_title} dari e-book {topik}. Tulis minimal 1500 kata agar sangat mendalam."
-                konten_bab = generate_text(prompt_bab)
-                seluruh_isi.append((bab_title, konten_bab))
-                
-                # Update Progress
-                progress = (i + 1) / len(daftar_bab)
-                progress_bar.progress(progress)
-                time.sleep(1) # Jeda agar tidak terkena limit API
+# --- LANGKAH 1: BUAT OUTLINE ---
+if st.button("1. Buat Outline Daftar Isi"):
+    with st.spinner("AI sedang merancang struktur buku..."):
+        prompt_outline = f"Buat daftar isi untuk buku tentang {topik} sebanyak {jml_bab_target} bab. Berikan hanya judul bab-babnya saja, dipisahkan dengan baris baru."
+        response = model.generate_content(prompt_outline)
+        st.session_state.daftar_bab = [line.strip() for line in response.text.split('\n') if line.strip()]
+        st.success(f"Outline selesai! {len(st.session_state.daftar_bab)} bab siap ditulis.")
 
-        # LANGKAH 3: Satukan ke PDF
-       # --- BAGIAN PENYUSUNAN PDF ---
-status_text.text("Menyusun PDF... Mohon tunggu.")
-pdf = FPDF()
-pdf.set_auto_page_break(auto=True, margin=15)
-
-for title, body in seluruh_isi:
-    pdf.add_page()
-    # Header Bab
-    pdf.set_font("Arial", 'B', 16)
-    # Gunakan .encode().decode() untuk menghindari karakter aneh yang bikin crash
-    safe_title = title.encode('latin-1', 'replace').decode('latin-1')
-    pdf.multi_cell(0, 10, safe_title)
-    pdf.ln(5)
+# --- LANGKAH 2: CICIL PENULISAN ---
+if st.session_state.daftar_bab:
+    st.subheader("Progress Penulisan")
+    current_done = len(st.session_state.isi_buku)
+    total_bab = len(st.session_state.daftar_bab)
     
-    # Isi Bab
-    pdf.set_font("Arial", size=12)
-    safe_body = body.encode('latin-1', 'replace').decode('latin-1')
-    pdf.multi_cell(0, 8, safe_body)
+    st.write(f"Selesai: {current_done} dari {total_bab} bab")
+    
+    if current_done < total_bab:
+        if st.button(f"Tulis 3 Bab Selanjutnya ({current_done + 1} - {min(current_done + 3, total_bab)})"):
+            bab_to_write = st.session_state.daftar_bab[current_done : current_done + 3]
+            
+            for bab_title in bab_to_write:
+                with st.status(f"Menulis {bab_title}...", expanded=True):
+                    prompt_bab = f"Tuliskan isi lengkap dan mendalam untuk {bab_title} dari buku {topik}. Tulis sekitar 800-1000 kata dengan detail yang tajam."
+                    response = model.generate_content(prompt_bab)
+                    st.session_state.isi_buku.append((bab_title, response.text))
+                    st.write("Bab selesai ditulis.")
+            st.rerun()
 
-# PERBAIKAN DI SINI:
-# Di fpdf2 terbaru, cukup panggil output() tanpa argumen untuk dapet bytes
-# Pastikan pdf_output benar-benar dalam format bytes
-pdf_output = bytes(pdf.output()) 
+# --- LANGKAH 3: RAKIT PDF ---
+if len(st.session_state.isi_buku) > 0:
+    st.divider()
+    st.subheader("Selesaikan Buku")
+    
+    if st.button("2. Rakit Semua Bab Jadi PDF"):
+        try:
+            pdf = FPDF()
+            pdf.set_auto_page_break(auto=True, margin=15)
+            
+            for title, body in st.session_state.isi_buku:
+                pdf.add_page()
+                # Header
+                pdf.set_font("Arial", 'B', 16)
+                pdf.multi_cell(0, 10, title.encode('latin-1', 'replace').decode('latin-1'))
+                pdf.ln(5)
+                # Body
+                pdf.set_font("Arial", size=12)
+                pdf.multi_cell(0, 8, body.encode('latin-1', 'replace').decode('latin-1'))
+            
+            pdf_bytes = bytes(pdf.output())
+            
+            st.download_button(
+                label="📥 Download E-Book Lengkap",
+                data=pdf_bytes,
+                file_name=f"Ebook_{topik.replace(' ', '_')}.pdf",
+                mime="application/pdf"
+            )
+        except Exception as e:
+            st.error(f"Gagal merakit PDF: {e}")
 
-st.success(f"Selesai! {jml_bab} Bab berhasil ditulis.")
-st.download_button(
-    label="Download E-Book Raksasa (PDF)",
-    data=pdf_output, 
-    file_name="ebook_raksasa.pdf",
-    mime="application/pdf"
-)
+if st.button("Reset Semua"):
+    st.session_state.isi_buku = []
+    st.session_state.daftar_bab = []
+    st.rerun()
