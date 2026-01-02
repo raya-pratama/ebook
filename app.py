@@ -69,12 +69,13 @@ for title, body in seluruh_isi:
 
 # PERBAIKAN DI SINI:
 # Di fpdf2 terbaru, cukup panggil output() tanpa argumen untuk dapet bytes
-pdf_output = pdf.output() 
+# Pastikan pdf_output benar-benar dalam format bytes
+pdf_output = bytes(pdf.output()) 
 
 st.success(f"Selesai! {jml_bab} Bab berhasil ditulis.")
 st.download_button(
     label="Download E-Book Raksasa (PDF)",
-    data=pdf_output, # Langsung masukkan pdf_output
+    data=pdf_output, 
     file_name="ebook_raksasa.pdf",
     mime="application/pdf"
 )
